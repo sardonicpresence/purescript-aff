@@ -75,11 +75,8 @@ cancelWith aff c = runFn3 _cancelWith nonCanceler aff c
 -- | If you do need to handle exceptions, you can use `runAff` instead, or
 -- | you can handle the exception within the Aff computation, using
 -- | `catchError` (or any of the other mechanisms).
-launchAff :: forall e a. Aff e a -> Eff (err :: EXCEPTION | e) Unit
-launchAff = runAff throwException (const (pure unit)) <<< liftEx
-  where
-  liftEx :: Aff e a -> Aff (err :: EXCEPTION | e) a
-  liftEx = _unsafeInterleaveAff
+launchAff :: forall e a. Aff (err :: EXCEPTION | e) a -> Eff (err :: EXCEPTION | e) Unit
+launchAff = runAff_ throwException (const (pure unit))
 
 -- | Runs the asynchronous computation. You must supply an error callback and a
 -- | success callback.
