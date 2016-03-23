@@ -4,13 +4,14 @@ import Prelude
 
 import Control.Alt ((<|>))
 import Control.Apply ((*>))
-import Control.Monad.Aff (Aff(), runAff, later, later', forkAff, forkAll, Canceler(..), cancel, attempt, finally, apathize)
+import Control.Monad.Aff (Aff(), runAff, runAff_, launchAff, later, later', forkAff, forkAll, Canceler(..), cancel, attempt, finally, apathize)
 import Control.Monad.Aff.AVar (AVAR(), makeVar, makeVar', putVar, modifyVar, takeVar, killVar)
 import Control.Monad.Aff.Console (log)
 import Control.Monad.Aff.Par (Par(..), runPar)
 import Control.Monad.Cont.Class (callCC)
 import Control.Monad.Eff (Eff())
 import Control.Monad.Eff.Console (CONSOLE())
+import Control.Monad.Eff.Console (log) as Eff
 import Control.Monad.Eff.Exception (EXCEPTION(), throwException, error)
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Rec.Class (tailRecM)
@@ -115,6 +116,12 @@ test_cancelLater = do
   v <- cancel c (error "Cause")
   log (if v then "Success: Canceled later" else "Failure: Did not cancel later")
 
+test_cancelRunLater :: forall e. Eff (console :: CONSOLE, err :: EXCEPTION | e) Unit
+test_cancelRunLater = do
+  c <- runAff throwException (const (pure unit)) $ later' 100 $ log ("Failure: Later was not canceled!")
+  launchAff $ (do v <- cancel c (error "Cause")
+                  log (if v then "Success: Canceled later" else "Failure: Did not cancel later"))
+
 test_cancelPar :: TestAVar Unit
 test_cancelPar = do
   c  <- forkAff <<< runPar $ Par (later' 100 $ log "Failure: #1 should not get through") <|>
@@ -149,60 +156,64 @@ delay n = callCC \cont ->
   later' n (cont unit)
 
 main :: Eff (console :: CONSOLE, avar :: AVAR, err :: EXCEPTION) Unit
-main = runAff throwException (const (pure unit)) $ do
-  log "Testing sequencing"
-  test_sequencing 3
+main = do
+  Eff.log "Testing kill of later in separate Aff"
+  test_cancelRunLater
 
-  log "Testing pure"
-  test_pure
+  runAff_ throwException (const (pure unit)) $ do
+    log "Testing sequencing"
+    test_sequencing 3
 
-  log "Testing attempt"
-  test_attempt
+    log "Testing pure"
+    test_pure
 
-  log "Testing later"
-  later $ log "Success: It happened later"
+    log "Testing attempt"
+    test_attempt
 
-  log "Testing kill of later"
-  test_cancelLater
+    log "Testing later"
+    later $ log "Success: It happened later"
 
-  log "Testing kill of first forked"
-  test_killFirstForked
+    log "Testing kill of later"
+    test_cancelLater
 
-  log "Testing apathize"
-  test_apathize
+    log "Testing kill of first forked"
+    test_killFirstForked
 
-  log "Testing semigroup canceler"
-  test_semigroupCanceler
+    log "Testing apathize"
+    test_apathize
 
-  log "Testing AVar - putVar, takeVar"
-  test_putTakeVar
+    log "Testing semigroup canceler"
+    test_semigroupCanceler
 
-  log "Testing AVar killVar"
-  test_killVar
+    log "Testing AVar - putVar, takeVar"
+    test_putTakeVar
 
-  log "Testing finally"
-  test_finally
+    log "Testing AVar killVar"
+    test_killVar
 
-  log "Testing Par (<|>)"
-  test_parRace
+    log "Testing finally"
+    test_finally
 
-  log "Testing Par (<|>) - kill one"
-  test_parRaceKill1
+    log "Testing Par (<|>)"
+    test_parRace
 
-  log "Testing Par (<|>) - kill two"
-  test_parRaceKill2
+    log "Testing Par (<|>) - kill one"
+    test_parRaceKill1
 
-  log "Testing cancel of Par (<|>)"
-  test_cancelPar
+    log "Testing Par (<|>) - kill two"
+    test_parRaceKill2
 
-  log "pre-delay"
-  delay 1000
+    log "Testing cancel of Par (<|>)"
+    test_cancelPar
 
-  log "post-delay"
-  loop 1000000
+    log "pre-delay"
+    delay 1000
 
-  all 100000
+    log "post-delay"
+    loop 1000000
 
-  cancelAll 100000
+    all 100000
 
-  log "Done testing"
+    cancelAll 100000
+
+    log "Done testing"

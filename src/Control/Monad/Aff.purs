@@ -17,6 +17,7 @@ module Control.Monad.Aff
   , makeAff'
   , nonCanceler
   , runAff
+  , runAff_
   )
   where
 
@@ -80,8 +81,16 @@ launchAff = runAff_ throwException (const (pure unit))
 
 -- | Runs the asynchronous computation. You must supply an error callback and a
 -- | success callback.
-runAff :: forall e a. (Error -> Eff e Unit) -> (a -> Eff e Unit) -> Aff e a -> Eff e Unit
+-- |
+-- | Returns a canceler that can be used to attempt cancellation of the
+-- | asynchronous computation.
+runAff :: forall e a. (Error -> Eff e Unit) -> (a -> Eff e Unit) -> Aff e a -> Eff e (Canceler e)
 runAff ex f aff = runFn3 _runAff ex f aff
+
+-- | Runs the asynchronous computation. You must supply an error callback and a
+-- | success callback.
+runAff_ :: forall e a. (Error -> Eff e Unit) -> (a -> Eff e Unit) -> Aff e a -> Eff e Unit
+runAff_ ex f aff = const unit <$> runFn3 _runAff ex f aff
 
 -- | Creates an asynchronous effect from a function that accepts error and
 -- | success callbacks. This function can be used for asynchronous computations
@@ -198,7 +207,7 @@ instance monadRecAff :: MonadRec (Aff e) where
         Right b -> pure b
 
 instance monadContAff :: MonadCont (Aff e) where
-  callCC f = makeAff (\eb cb -> runAff eb cb (f \a -> makeAff (\_ _ -> cb a)))
+  callCC f = makeAff (\eb cb -> runAff_ eb cb (f \a -> makeAff (\_ _ -> cb a)))
 
 instance semigroupCanceler :: Semigroup (Canceler e) where
   append (Canceler f1) (Canceler f2) = Canceler (\e -> (||) <$> f1 e <*> f2 e)
@@ -228,6 +237,6 @@ foreign import _bind :: forall e a b. Fn3 (Canceler e) (Aff e a) (a -> Aff e b) 
 
 foreign import _attempt :: forall e a. Fn3 (forall x y. x -> Either x y) (forall x y. y -> Either x y) (Aff e a) (Aff e (Either Error a))
 
-foreign import _runAff :: forall e a. Fn3 (Error -> Eff e Unit) (a -> Eff e Unit) (Aff e a) (Eff e Unit)
+foreign import _runAff :: forall e a. Fn3 (Error -> Eff e Unit) (a -> Eff e Unit) (Aff e a) (Eff e (Canceler e))
 
 foreign import _liftEff :: forall e a. Fn2 (Canceler e) (Eff e a) (Aff e a)
