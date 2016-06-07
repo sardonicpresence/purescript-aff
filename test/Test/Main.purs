@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Alt ((<|>))
 import Control.Apply ((*>))
-import Control.Monad.Aff (Aff(), runAff, runAff_, launchAff, later, later', forkAff, forkAll, Canceler(..), cancel, attempt, finally, apathize)
+import Control.Monad.Aff (Aff(), runAff, launchAff, later, later', forkAff, forkAll, Canceler(..), cancel, attempt, finally, apathize)
 import Control.Monad.Aff.AVar (AVAR(), makeVar, makeVar', putVar, modifyVar, takeVar, killVar)
 import Control.Monad.Aff.Console (log)
 import Control.Monad.Aff.Par (Par(..), runPar)
@@ -119,8 +119,8 @@ test_cancelLater = do
 test_cancelRunLater :: forall e. Eff (console :: CONSOLE, err :: EXCEPTION | e) Unit
 test_cancelRunLater = do
   c <- runAff throwException (const (pure unit)) $ later' 100 $ log ("Failure: Later was not canceled!")
-  launchAff $ (do v <- cancel c (error "Cause")
-                  log (if v then "Success: Canceled later" else "Failure: Did not cancel later"))
+  void $ launchAff $ (do v <- cancel c (error "Cause")
+                         log (if v then "Success: Canceled later" else "Failure: Did not cancel later"))
 
 test_cancelPar :: TestAVar Unit
 test_cancelPar = do
@@ -160,7 +160,7 @@ main = do
   Eff.log "Testing kill of later in separate Aff"
   test_cancelRunLater
 
-  runAff_ throwException (const (pure unit)) $ do
+  void $ runAff throwException (const (pure unit)) $ do
     log "Testing sequencing"
     test_sequencing 3
 

@@ -17,7 +17,6 @@ module Control.Monad.Aff
   , makeAff'
   , nonCanceler
   , runAff
-  , runAff_
   )
   where
 
@@ -76,8 +75,8 @@ cancelWith aff c = runFn3 _cancelWith nonCanceler aff c
 -- | If you do need to handle exceptions, you can use `runAff` instead, or
 -- | you can handle the exception within the Aff computation, using
 -- | `catchError` (or any of the other mechanisms).
-launchAff :: forall e a. Aff (err :: EXCEPTION | e) a -> Eff (err :: EXCEPTION | e) Unit
-launchAff = runAff_ throwException (const (pure unit))
+launchAff :: forall e a. Aff (err :: EXCEPTION | e) a -> Eff (err :: EXCEPTION | e) (Canceler (err :: EXCEPTION | e))
+launchAff = runAff throwException (const (pure unit))
 
 -- | Runs the asynchronous computation. You must supply an error callback and a
 -- | success callback.
@@ -86,11 +85,6 @@ launchAff = runAff_ throwException (const (pure unit))
 -- | asynchronous computation.
 runAff :: forall e a. (Error -> Eff e Unit) -> (a -> Eff e Unit) -> Aff e a -> Eff e (Canceler e)
 runAff ex f aff = runFn3 _runAff ex f aff
-
--- | Runs the asynchronous computation. You must supply an error callback and a
--- | success callback.
-runAff_ :: forall e a. (Error -> Eff e Unit) -> (a -> Eff e Unit) -> Aff e a -> Eff e Unit
-runAff_ ex f aff = const unit <$> runFn3 _runAff ex f aff
 
 -- | Creates an asynchronous effect from a function that accepts error and
 -- | success callbacks. This function can be used for asynchronous computations
@@ -207,7 +201,7 @@ instance monadRecAff :: MonadRec (Aff e) where
         Right b -> pure b
 
 instance monadContAff :: MonadCont (Aff e) where
-  callCC f = makeAff (\eb cb -> runAff_ eb cb (f \a -> makeAff (\_ _ -> cb a)))
+  callCC f = makeAff (\eb cb -> void $ runAff eb cb (f \a -> makeAff (\_ _ -> cb a)))
 
 instance semigroupCanceler :: Semigroup (Canceler e) where
   append (Canceler f1) (Canceler f2) = Canceler (\e -> (||) <$> f1 e <*> f2 e)
